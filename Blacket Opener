@@ -1,0 +1,147 @@
+let extra_delay = 0;
+let max_delay = Object.values(blacket.rarities)
+  .map(x => x.wait)
+  .reduce((a, b) => a > b ? a : b) + extra_delay;
+
+const rarityOrder = Object.entries(blacket.rarities)
+  .sort((a, b) => a[1].exp - b[1].exp)
+  .map(x => x[0]);
+
+// === styles for bw flashing ===
+const style = document.createElement("style");
+style.innerHTML = `
+@keyframes bwFlash {
+  0%, 100% { color: #000; background: #fff; }
+  50% { color: #fff; background: #000; }
+}
+.bwFlash {
+  font-size: 26px;
+  font-weight: bold;
+  font-family: "Titan One", sans-serif;
+  text-align: center;
+  white-space: pre-line;
+  animation: bwFlash 0.5s infinite;
+  padding: 5px 10px;
+  border-radius: 10px;
+}
+`;
+document.head.appendChild(style);
+
+// === panel setup ===
+const panel = document.createElement("div");
+panel.style.position = "fixed";
+panel.style.top = "20px";
+panel.style.right = "20px";
+panel.style.width = "300px";
+panel.style.maxHeight = "80vh";
+panel.style.overflowY = "auto";
+panel.style.background = "#111";
+panel.style.color = "#fff";
+panel.style.padding = "15px";
+panel.style.borderRadius = "20px";
+panel.style.fontFamily = "Titan One, sans-serif";
+panel.style.boxShadow = "0 0 20px rgba(0,0,0,0.5)";
+panel.style.cursor = "move";
+panel.style.resize = "both";
+document.body.appendChild(panel);
+
+// draggable
+let isDragging = false, offsetX, offsetY;
+panel.addEventListener("mousedown", (e) => {
+  if (e.target !== panel) return;
+  isDragging = true;
+  offsetX = e.clientX - panel.offsetLeft;
+  offsetY = e.clientY - panel.offsetTop;
+});
+document.addEventListener("mousemove", (e) => {
+  if (isDragging) {
+    panel.style.left = (e.clientX - offsetX) + "px";
+    panel.style.top = (e.clientY - offsetY) + "px";
+    panel.style.right = "auto";
+  }
+});
+document.addEventListener("mouseup", () => { isDragging = false; });
+
+// color helper
+const pSBC = (p,c0,c1,l)=>{let r,g,b,P,f,t,h,i=parseInt,m=Math.round,a=typeof(c1)=="string";if(typeof(p)!="number"||p<-1||p>1||typeof(c0)!="string"||(c0[0]!='r'&&c0[0]!='#')||(c1&&!a))return null;if(!this.pSBCr)this.pSBCr=(d)=>{let n=d.length,x={};if(n>9){[r,g,b,a]=d=d.split(","),n=d.length;if(n<3||n>4)return null;x.r=i(r[3]=="a"?r.slice(5):r.slice(4)),x.g=i(g),x.b=i(b),x.a=a?parseFloat(a):-1}else{if(n==8||n==6||n<4)return null;if(n<6)d="#"+d[1]+d[1]+d[2]+d[2]+d[3]+d[3]+(n>4?d[4]+d[4]:"");d=i(d.slice(1),16);if(n==9||n==5)x.r=d>>24&255,x.g=d>>16&255,x.b=d>>8&255,x.a=m((d&255)/0.255)/1000;else x.r=d>>16,x.g=d>>8&255,x.b=d&255,x.a=-1}return x};h=c0.length>9,h=a?c1.length>9?true:c1=="c"?!h:false:h,f=this.pSBCr(c0),P=p<0,t=c1&&c1!="c"?this.pSBCr(c1):P?{r:0,g:0,b:0,a:-1}:{r:255,g:255,b:255,a:-1},p=P?p*-1:p,P=1-p;if(!f||!t)return null;if(l)r=m(P*f.r+p*t.r),g=m(P*f.g+p*t.g),b=m(P*f.b+p*t.b);else r=m((P*f.r**2+p*t.r**2)**0.5),g=m((P*f.g**2+p*t.g**2)**0.5),b=m((P*f.b**2+p*t.b**2)**0.5);a=f.a,t=t.a,f=a>=0||t>=0,a=f?a<0?t:t<0?a:a*P+t*p:0;if(h)return"rgb"+(f?"a(":"(")+r+","+g+","+b+(f?","+m(a*1000)/1000:"")+")";else return"#"+(4294967296+r*16777216+g*65536+b*256+(f?m(a*255):0)).toString(16).slice(1,f?undefined:-2)};
+
+// opener
+let openPack = async (pack) => {
+  return new Promise((resolve, reject) => {
+    blacket.requests.post("/worker3/open", { pack }, (data) => {
+      if (data.error) reject();
+      resolve(data.blook);
+    });
+  });
+};
+
+let main = async (pack, amount) => {
+  const attainedBlooks = {};
+  let totalOpened = 0;
+
+  while (totalOpened < amount) {
+    try {
+      const blook = await openPack(pack);
+      blacket.user.tokens -= blacket.packs[pack].price;
+      const rarity = blacket.blooks[blook].rarity;
+      const delay = blacket.rarities[rarity].wait + extra_delay;
+      const color = blacket.rarities[rarity].color;
+
+      attainedBlooks[blook] = (attainedBlooks[blook] || 0) + 1;
+      totalOpened++;
+
+      panel.innerHTML = `<h3 style="margin:0 0 10px 0;font-size:20px;text-align:center;">Opened ${totalOpened}/${amount} ${pack} packs</h3>`;
+      Object.keys(attainedBlooks).forEach((b) => {
+        const count = attainedBlooks[b];
+        const col = blacket.rarities[blacket.blooks[b].rarity].color;
+        const div = document.createElement("div");
+        div.style.margin = "6px 0";
+        div.style.fontSize = "18px";
+        div.style.textShadow = "0 0 6px rgba(255,255,255,0.5)";
+        div.style.background = `linear-gradient(45deg, ${col}, ${pSBC(0.5, col)})`;
+        div.style.webkitBackgroundClip = "text";
+        div.style.webkitTextFillColor = "transparent";
+        div.textContent = `${b} ${count > 1 ? count + "x" : ""}`;
+        panel.appendChild(div);
+      });
+
+      await new Promise(r => setTimeout(r, delay));
+    } catch (err) {
+      console.log(err);
+      await new Promise(r => setTimeout(r, max_delay));
+    }
+  }
+
+  // final flashing message
+  const done = document.createElement("div");
+  done.style.marginTop = "15px";
+  done.className = "bwFlash";
+  done.textContent = "Thanks For Using My Opener!\n-PrimeAndrew";
+  panel.appendChild(done);
+};
+
+// === greeting instantly when pasted ===
+const greeting = document.createElement("div");
+greeting.className = "bwFlash";
+greeting.style.marginBottom = "10px";
+greeting.textContent = "Thanks For Using My Opener!\n-PrimeAndrew";
+panel.appendChild(greeting);
+
+// ask user
+let packs = Object.keys(blacket.packs);
+let pack;
+do {
+  if (((pack && !packs.includes(pack)) || pack === "") && !window.confirm("Invalid pack, try again?")) break;
+  pack = window.prompt("Enter a pack (case-sensitive)");
+  if (pack === null) break;
+} while(!pack || !packs.includes(pack));
+
+let amount;
+let max_packs = Math.floor(blacket.user.tokens / blacket.packs[pack].price);
+do {
+  if (amount && (amount < 1 || amount > max_packs) && !window.confirm("Invalid amount, try again?")) break;
+  amount = parseInt(window.prompt(`Enter number of packs (Max: ${max_packs})`));
+  if (amount === null) break;
+} while(!amount || amount < 1 || amount > max_packs);
+
+if (pack && amount) main(pack, amount);

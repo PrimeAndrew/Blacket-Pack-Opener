@@ -127,15 +127,26 @@ greeting.style.marginBottom = "10px";
 greeting.textContent = "Thanks For Using My Opener!\n-PrimeAndrew";
 panel.appendChild(greeting);
 
-// ask user
+// === non-case-sensitive pack selection ===
 let packs = Object.keys(blacket.packs);
 let pack;
 do {
-  if (((pack && !packs.includes(pack)) || pack === "") && !window.confirm("Invalid pack, try again?")) break;
-  pack = window.prompt("Enter a pack (case-sensitive)");
-  if (pack === null) break;
-} while(!pack || !packs.includes(pack));
+  if (
+    ((pack && !packs.map(p => p.toLowerCase()).includes(pack.toLowerCase())) || pack === "") 
+    && !window.confirm("Invalid pack, try again?")
+  ) break;
 
+  pack = window.prompt("Enter a pack (case-insensitive)");
+  if (pack === null) break;
+} while(!pack || !packs.map(p => p.toLowerCase()).includes(pack.toLowerCase()));
+
+// fix pack casing to the real key
+if (pack) {
+  const found = packs.find(p => p.toLowerCase() === pack.toLowerCase());
+  pack = found;
+}
+
+// === amount selection ===
 let amount;
 let max_packs = Math.floor(blacket.user.tokens / blacket.packs[pack].price);
 do {
